@@ -38,7 +38,15 @@ __device__ int getIndexShared(int tx, int ty) {
 }
 
 __device__ int getIndexSharedBorder(int tx, int ty) {
+	if (tx < -1 || tx >= BLOCKWIDTH+1 || ty < -1 || ty >= BLOCKHEIGHT+1) {
+		printf( "wrong Idx" ) ;
+		return 0;
+	}
 	return (ty+1) * BLOCKWIDTH + (tx+1);
+}
+
+__device__ float getValueSharedBorder(float* a, int tx, int ty) {
+	return a[getIndexSharedBorder(tx,ty)] ;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -59,7 +67,7 @@ void filterOnHost(float* h_a, float* h_res_cpu) {
 //////////////////////////////////////////////////////////////////////////////
 // Device implementation (kernel)
 //////////////////////////////////////////////////////////////////////////////
-__global__ void filter_Kernel_Border(float* d_a, float* d_res) {
+__global__ void filter_Kernel_Border(float* d_a, float* d_res) {	
 	// 2D Thread ID
 	int tx = threadIdx.x;
 	int ty = threadIdx.y;
@@ -77,29 +85,45 @@ __global__ void filter_Kernel_Border(float* d_a, float* d_res) {
 	// Idea: Threads at the border load the neighboring part
 	// left part
 	if (tx <= 0) {
-		s_a[getIndexSharedBorder(-1,ty)] = getValueGlobal(d_a, i-1, j); 
+		s_a[getIndexSharedBorder(tx-1,ty)] = getValueGlobal(d_a, i-1, j); 
 	}
 	// right part
 	if (tx >= BLOCKWIDTH-1) {
-		s_a[getIndexSharedBorder(BLOCKWIDTH,ty)] = getValueGlobal(d_a, i+1, j); 
+		s_a[getIndexSharedBorder(tx+1,ty)] = getValueGlobal(d_a, i+1, j); 
 	}
 	// downer part
 	if (ty <= 0) {
-		s_a[getIndexSharedBorder(tx,-1)] = getValueGlobal(d_a, i, j-1); 
+		s_a[getIndexSharedBorder(tx,ty-1)] = getValueGlobal(d_a, i, j-1); 
 	}	
 	// upper part
 	if (ty >= BLOCKHEIGHT-1) {
-		s_a[getIndexSharedBorder(tx,BLOCKHEIGHT)] = getValueGlobal(d_a, i, j+1); 
+		s_a[getIndexSharedBorder(tx,ty+1)] = getValueGlobal(d_a, i, j+1); 
 	}
+	//edges
+	if (tx <= 0 && ty <= 0) {
+		printf( "Setting local: %d to At Index %d to Value: %f\n", getIndexSharedBorder(tx-1,ty-1),  getIndexGlobal(i, j), getValueGlobal(d_a, i-1, j-1));
+		s_a[getIndexSharedBorder(tx-1,ty-1)] = getValueGlobal(d_a, i-1, j-1); 
+	}
+	if (tx >= BLOCKWIDTH-1 && ty <= 0) {
+		s_a[getIndexSharedBorder(tx+1,ty-1)] = getValueGlobal(d_a, i+1, j-1); 
+	}
+	if (tx <= 0 && ty >= BLOCKHEIGHT-1) {
+		s_a[getIndexSharedBorder(tx-1,ty+1)] = getValueGlobal(d_a, i-1, j+1); 
+	}
+	if (tx >= BLOCKWIDTH-1 && ty >= BLOCKHEIGHT-1) {
+		s_a[getIndexSharedBorder(tx+1,ty+1)] = getValueGlobal(d_a, i+1, j+1); 
+	}
+
+
 
 	// synchronize
 	__syncthreads() ;
 
-	float Gx = s_a[getIndexSharedBorder(tx-1, ty-1)]+2*s_a[getIndexSharedBorder(tx-1, ty)]+s_a[getIndexSharedBorder(tx-1, ty+1)]
-					-s_a[getIndexSharedBorder(tx+1, ty-1)]-2*s_a[getIndexSharedBorder(tx+1, ty)]-s_a[getIndexSharedBorder(tx+1, ty+1)];
+	float Gx = getValueSharedBorder(s_a, tx-1, ty-1)+2*getValueSharedBorder(s_a, tx-1, ty)+getValueSharedBorder(s_a, tx-1, ty+1)
+					-getValueSharedBorder(s_a, tx+1, ty-1)-2*getValueSharedBorder(s_a, tx+1, ty)-getValueSharedBorder(s_a, tx+1, ty+1);
 
-	float Gy = s_a[getIndexSharedBorder(tx-1, ty-1)]+2*s_a[getIndexSharedBorder(tx, ty-1)]+s_a[getIndexSharedBorder(tx+1, ty-1)]
-					-s_a[getIndexSharedBorder(tx-1, ty+1)]-2*s_a[getIndexSharedBorder(tx, ty+1)]-s_a[getIndexSharedBorder(tx+1, ty+1)];
+	float Gy = getValueSharedBorder(s_a, tx-1, ty-1)+2*getValueSharedBorder(s_a, tx, ty-1)+getValueSharedBorder(s_a, tx+1, ty-1)
+					-getValueSharedBorder(s_a, tx-1, ty+1)-2*getValueSharedBorder(s_a, tx, ty+1)-getValueSharedBorder(s_a, tx+1, ty+1);
 	
 	d_res[getIndexGlobal(i, j)] = sqrt(Gx * Gx + Gy * Gy);
 }
@@ -186,7 +210,7 @@ __global__ void filter_Kernel(float* d_a, float* d_res) {
 void filterOnDevice(float* d_a, float* d_res) {
 	dim3 dimGrid(GRIDWIDTH, GRIDHEIGHT);
 	dim3 dimBlock(BLOCKWIDTH, BLOCKHEIGHT);
-	filter_Kernel_Border<<< dimGrid, dimBlock >>>( d_a, d_res );
+	CUDA_CHECK_KERNEL(filter_Kernel_Border<<< dimGrid, dimBlock >>>( d_a, d_res ));
 }
 
 //////////////////////////////////////////////////////////////////////////////
