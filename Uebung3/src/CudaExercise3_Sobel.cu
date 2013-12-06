@@ -59,8 +59,8 @@ __global__ void filter_Kernel(float* d_a, float* d_res) {
 	// 2D Thread ID
 	int tx = threadIdx.x;
 	int ty = threadIdx.y;
-	//TODO int i = ...; // global thread Ids
-	//TODO int j = ...; // global thread Ids
+	int i = blockIdx.x * blockDim.x + threadIdx.x; // global thread Ids
+	int j = blockIdx.y * blockDim.y + threadIdx.y; // global thread Ids
 
 	// This part is only for version 2 and 3 of the kernel
 	/*
@@ -99,13 +99,22 @@ __global__ void filter_Kernel(float* d_a, float* d_res) {
 	//TODO float Gx = ...;
 	//TODO float Gy = ...;
 	//TODO d_res[...] = sqrt(Gx * Gx + Gy * Gy); // write the result to global memory
+
+	float Gx = getValueGlobal(d_a, i-1, j-1)+2*getValueGlobal(d_a, i-1, j)+getValueGlobal(d_a, i-1, j+1)
+					-getValueGlobal(d_a, i+1, j-1)-2*getValueGlobal(d_a, i+1, j)-getValueGlobal(d_a, i+1, j+1);
+	float Gy = getValueGlobal(d_a, i-1, j-1)+2*getValueGlobal(d_a, i, j-1)+getValueGlobal(d_a, i+1, j-1)
+					-getValueGlobal(d_a, i-1, j+1)-2*getValueGlobal(d_a, i, j+1)-getValueGlobal(d_a, i+1, j+1);
+	
+	d_res[getIndexGlobal(i, j)] = sqrt(Gx * Gx + Gy * Gy);
 }
 
 //////////////////////////////////////////////////////////////////////////////
 // Device implementation (host function)
 //////////////////////////////////////////////////////////////////////////////
 void filterOnDevice(float* d_a, float* d_res) {
-	//TODO: Kernel call
+	dim3 dimGrid(GRIDWIDTH, GRIDHEIGHT);
+	dim3 dimBlock(BLOCKWIDTH, BLOCKHEIGHT);
+	filter_Kernel<<< dimGrid, dimBlock >>>( d_a, d_res );
 }
 
 //////////////////////////////////////////////////////////////////////////////
