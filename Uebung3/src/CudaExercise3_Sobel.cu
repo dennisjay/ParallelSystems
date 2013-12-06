@@ -34,7 +34,7 @@ __host__ __device__ float getValueGlobal(float* a, int i, int j) {
 }
 
 __device__ int getIndexShared(int tx, int ty) {
-	//TODO
+	return ty * BLOCKWIDTH + tx;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -63,47 +63,70 @@ __global__ void filter_Kernel(float* d_a, float* d_res) {
 	int j = blockIdx.y * blockDim.y + threadIdx.y; // global thread Ids
 
 	// This part is only for version 2 and 3 of the kernel
-	/*
 	// declaration of the array in shared memory
 	__shared__ float s_a[BLOCKWIDTH * BLOCKHEIGHT];
 	//
 	// filling the array in shared memory
 	// central part
-	s_a[getIndexShared(...)] = d_a[...]; //TODO
+	s_a[getIndexShared(tx, ty)] = d_a[getIndexGlobal(i, j)]; 
 	//
 	// synchronize
-	//TODO
-	*/
+	__syncthreads() ;
 
 	// Values of neighbouring pixels
 	float a_xm1_ym1;
 	float a_xm1_y;
 	float a_xm1_yp1;
-	float a_x_ym1;
-	float a_x_yp1;
-	float a_xp1_ym1;
-	float a_xp1_y;
+	float a_x_ym1; 
+	float a_x_yp1; 
+	float a_xp1_ym1; 
+	float a_xp1_y; 
 	float a_xp1_yp1;
 
 	// This part is only for version 2 of the kernel
-	/*
 	if ((tx > 0) && (ty > 0))
-		a_xm1_ym1 = s_a[...];
+		a_xm1_ym1 = s_a[getIndexShared(tx-1, ty-1)];
 	else
-		a_xm1_ym1 = getValueGlobal(...);
-	//
-	//TODO
-	*/
+		a_xm1_ym1 = getValueGlobal(d_a, i-1, j-1);
 
-	// calculate Gx and Gy
-	//TODO float Gx = ...;
-	//TODO float Gy = ...;
-	//TODO d_res[...] = sqrt(Gx * Gx + Gy * Gy); // write the result to global memory
+	if ((tx > 0))
+		a_xm1_y = s_a[getIndexShared(tx-1, ty)];
+	else
+		a_xm1_y = getValueGlobal(d_a, i-1, j);
 
-	float Gx = getValueGlobal(d_a, i-1, j-1)+2*getValueGlobal(d_a, i-1, j)+getValueGlobal(d_a, i-1, j+1)
-					-getValueGlobal(d_a, i+1, j-1)-2*getValueGlobal(d_a, i+1, j)-getValueGlobal(d_a, i+1, j+1);
-	float Gy = getValueGlobal(d_a, i-1, j-1)+2*getValueGlobal(d_a, i, j-1)+getValueGlobal(d_a, i+1, j-1)
-					-getValueGlobal(d_a, i-1, j+1)-2*getValueGlobal(d_a, i, j+1)-getValueGlobal(d_a, i+1, j+1);
+	if ((tx > 0) && (ty < BLOCKHEIGHT-1))
+		a_xm1_yp1 = s_a[getIndexShared(tx-1, ty+1)];
+	else
+		a_xm1_yp1 = getValueGlobal(d_a, i-1, j+1);
+
+	if (ty > 0)
+		a_x_ym1 = s_a[getIndexShared(tx, ty-1)];
+	else
+		a_x_ym1 = getValueGlobal(d_a, i, j-1);
+
+	if (ty < BLOCKHEIGHT-1)
+		a_x_yp1 = s_a[getIndexShared(tx, ty+1)];
+	else
+		a_x_yp1 = getValueGlobal(d_a, i, j+1);
+
+	if ((tx < BLOCKWIDTH-1) && (ty>0))
+		a_xp1_ym1 = s_a[getIndexShared(tx+1, ty-1)];
+	else
+		a_xp1_ym1 = getValueGlobal(d_a, i+1, j-1);
+
+	if ((tx < BLOCKWIDTH-1))
+		a_xp1_y = s_a[getIndexShared(tx+1, ty)];
+	else
+		a_xp1_y = getValueGlobal(d_a, i+1, j);
+
+	if ((tx < BLOCKWIDTH-1) && (ty < BLOCKHEIGHT-1))
+		a_xp1_yp1 = s_a[getIndexShared(tx+1, ty+1)];
+	else
+		a_xp1_yp1 = getValueGlobal(d_a, i+1, j+1);
+
+
+	float Gx = a_xm1_ym1+2*a_xm1_y+a_xm1_yp1-a_xp1_ym1-2*a_xp1_y-a_xp1_yp1;
+	float Gy = a_xm1_ym1+2*a_x_ym1+a_xp1_ym1-a_xm1_yp1-2*a_x_yp1-a_xp1_yp1;
 	
 	d_res[getIndexGlobal(i, j)] = sqrt(Gx * Gx + Gy * Gy);
 }
