@@ -19,7 +19,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <CudaCompile Include="src\CudaExercise3_Sobel.cu" />
+    <CudaCompile Include="src\CudaExercise3_Sobel.cu">
+      <CodeGeneration Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">compute_20,sm_20</CodeGeneration>
+    </CudaCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="common_inc\exception.h" />
