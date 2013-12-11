@@ -42,7 +42,7 @@ __device__ int getIndexSharedBorder(int tx, int ty) {
 		printf( "wrong Idx" ) ;
 		return 0;
 	}
-	return (ty+1) * BLOCKWIDTH + (tx+1);
+	return (ty+1) * (BLOCKWIDTH+2) + (tx+1);
 }
 
 __device__ float getValueSharedBorder(float* a, int tx, int ty) {
@@ -101,7 +101,6 @@ __global__ void filter_Kernel_Border(float* d_a, float* d_res) {
 	}
 	//edges
 	if (tx <= 0 && ty <= 0) {
-		printf( "Setting local: %d to At Index %d to Value: %f\n", getIndexSharedBorder(tx-1,ty-1),  getIndexGlobal(i, j), getValueGlobal(d_a, i-1, j-1));
 		s_a[getIndexSharedBorder(tx-1,ty-1)] = getValueGlobal(d_a, i-1, j-1); 
 	}
 	if (tx >= BLOCKWIDTH-1 && ty <= 0) {
